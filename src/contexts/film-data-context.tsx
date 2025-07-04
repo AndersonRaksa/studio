@@ -61,7 +61,13 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
       .filter(r => r.ativo)
       .sort((a, b) => a.data_compra.getTime() - b.data_compra.getTime());
 
-    const suitableRoll = availableRolls.find(r => r.comprimento_atual_metros >= metros_consumidos);
+    let suitableRoll: Roll | undefined;
+    for (const roll of availableRolls) {
+      if (roll.comprimento_atual_metros >= metros_consumidos) {
+        suitableRoll = roll;
+        break; 
+      }
+    }
 
     if (!suitableRoll) {
       toast({
