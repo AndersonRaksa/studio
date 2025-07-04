@@ -1,3 +1,4 @@
+
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
@@ -48,60 +49,97 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const registerPrint = (printData: Omit<PrintJob, 'id' | 'data_impressao' | 'metros_consumidos' | 'rolo_utilizado_id'>) => {
-    let metros_consumidos = 0;
+    let singlePhotoConsumption = 0;
     if (printData.tipo_foto === '20x30') {
-      metros_consumidos = 0.30 * printData.quantidade_fotos;
+        singlePhotoConsumption = 0.30;
     } else if (printData.tipo_foto === '30x40') {
-      metros_consumidos = 0.40 * printData.quantidade_fotos;
+        singlePhotoConsumption = 0.40;
     } else if (printData.tipo_foto === '30x60') {
-      metros_consumidos = 0.60 * printData.quantidade_fotos;
+        singlePhotoConsumption = 0.60;
     }
 
-    const availableRolls = rolls
+    if (singlePhotoConsumption === 0) {
+        toast({ variant: "destructive", title: "Erro", description: "Tamanho de foto inválido." });
+        return;
+    }
+
+    let remainingPhotosToPrint = printData.quantidade_fotos;
+    const sortedActiveRolls = rolls
       .filter(r => r.ativo)
       .sort((a, b) => a.data_compra.getTime() - b.data_compra.getTime());
+    
+    const rollsBeingUpdated: Roll[] = JSON.parse(JSON.stringify(rolls)); 
+    const newJobsCreated: PrintJob[] = [];
+    let totalPhotosPrinted = 0;
 
-    let suitableRoll: Roll | undefined;
-    for (const roll of availableRolls) {
-      if (roll.comprimento_atual_metros >= metros_consumidos) {
-        suitableRoll = roll;
-        break; 
-      }
+    for (const roll of sortedActiveRolls) {
+        if (remainingPhotosToPrint <= 0) break;
+
+        const currentRollState = rollsBeingUpdated.find(r => r.id === roll.id)!;
+        
+        const maxPhotosOnThisRoll = Math.floor(currentRollState.comprimento_atual_metros / singlePhotoConsumption);
+        
+        if (maxPhotosOnThisRoll <= 0) {
+            if (currentRollState.comprimento_atual_metros < 0.60) {
+                currentRollState.ativo = false;
+            }
+            continue; 
+        }
+        
+        const photosToPrintFromThisRoll = Math.min(remainingPhotosToPrint, maxPhotosOnThisRoll);
+        
+        if (photosToPrintFromThisRoll > 0) {
+            const consumptionForThisJob = photosToPrintFromThisRoll * singlePhotoConsumption;
+            
+            const newJob: PrintJob = {
+                id: `print-${new Date().getTime()}-${newJobsCreated.length}`,
+                rolo_utilizado_id: roll.id,
+                nome_cliente: printData.nome_cliente,
+                data_impressao: new Date(),
+                tipo_foto: printData.tipo_foto,
+                quantidade_fotos: photosToPrintFromThisRoll,
+                metros_consumidos: consumptionForThisJob,
+            };
+            newJobsCreated.push(newJob);
+            
+            currentRollState.comprimento_atual_metros -= consumptionForThisJob;
+            
+            if (currentRollState.comprimento_atual_metros < 0.60) {
+                currentRollState.ativo = false;
+            }
+            
+            remainingPhotosToPrint -= photosToPrintFromThisRoll;
+            totalPhotosPrinted += photosToPrintFromThisRoll;
+        }
     }
+    
+    const finalRollsState = rollsBeingUpdated.map(r => ({ ...r, data_compra: new Date(r.data_compra) }))
+      .sort((a, b) => new Date(b.data_compra).getTime() - new Date(a.data_compra).getTime());
 
-    if (!suitableRoll) {
-      toast({
-        variant: "destructive",
-        title: "Papel Insuficiente",
-        description: "Nenhum rolo no estoque tem comprimento suficiente para esta impressão.",
-      });
-      return;
+    if (totalPhotosPrinted > 0) {
+        setRolls(finalRollsState);
+        setPrintJobs(prev => [...newJobsCreated, ...prev].sort((a,b) => b.data_impressao.getTime() - a.data_impressao.getTime()));
+        
+        toast({
+            title: "Impressão Concluída",
+            description: `${totalPhotosPrinted} de ${printData.quantidade_fotos} fotos para ${printData.nome_cliente} foram registradas.`,
+        });
+
+        if (remainingPhotosToPrint > 0) {
+            toast({
+                variant: "destructive",
+                title: "Papel Insuficiente",
+                description: `Não foi possível imprimir as ${remainingPhotosToPrint} fotos restantes.`,
+            });
+        }
+    } else {
+       toast({
+          variant: "destructive",
+          title: "Papel Insuficiente",
+          description: "Nenhum rolo no estoque tem comprimento suficiente para esta impressão.",
+       });
+       setRolls(finalRollsState);
     }
-
-    const newPrintJob: PrintJob = {
-      ...printData,
-      id: `print-${new Date().getTime()}`,
-      rolo_utilizado_id: suitableRoll.id,
-      data_impressao: new Date(),
-      metros_consumidos,
-    };
-
-    setPrintJobs(prev => [newPrintJob, ...prev].sort((a,b) => b.data_impressao.getTime() - a.data_impressao.getTime()));
-    setRolls(prev => prev.map(r => {
-      if (r.id === suitableRoll.id) {
-        const newLength = r.comprimento_atual_metros - metros_consumidos;
-        return {
-          ...r,
-          comprimento_atual_metros: newLength,
-          ativo: newLength > 0,
-        };
-      }
-      return r;
-    }));
-     toast({
-      title: "Impressão Registrada",
-      description: `${printData.quantidade_fotos} fotos para ${printData.nome_cliente} foram registradas no rolo "${suitableRoll.nome_rolo}".`,
-    })
   };
 
   const deleteRoll = (rollId: string) => {
