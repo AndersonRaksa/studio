@@ -43,6 +43,8 @@ export function RegisterPrintDialog() {
     resolver: zodResolver(registerPrintSchema),
     defaultValues: {
         nome_cliente: "",
+        tipo_foto: "20x30",
+        quantidade_fotos: NaN,
     }
   })
 
@@ -144,7 +146,7 @@ export function RegisterPrintDialog() {
                 <FormItem>
                   <FormLabel>Quantidade de Fotos</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="Ex: 25" {...field} />
+                    <Input type="number" placeholder="Ex: 25" {...field} value={field.value || ''} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
