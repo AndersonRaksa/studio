@@ -1,21 +1,10 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-import { collection, query, onSnapshot, addDoc, serverTimestamp, orderBy, doc, runTransaction, deleteDoc, where, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import type { Roll, PrintJob } from '@/lib/types';
+import { initialRolls, initialPrintJobs } from '@/lib/data';
 import { useToast } from "@/hooks/use-toast";
-
-// Helper to convert Firestore Timestamps to JS Dates
-const convertTimestamps = (docData: any) => {
-  const data = { ...docData };
-  for (const key in data) {
-    if (data[key]?.toDate && typeof data[key].toDate === 'function') {
-      data[key] = data[key].toDate();
-    }
-  }
-  return data;
-};
+import type { PrintSize } from "@/lib/types";
 
 interface FilmDataContextType {
   rolls: Roll[];
@@ -30,74 +19,66 @@ interface FilmDataContextType {
 const FilmDataContext = createContext<FilmDataContextType | undefined>(undefined);
 
 export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
-  const [rolls, setRolls] = useState<Roll[]>([]);
-  const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
+  const [rolls, setRolls] = useState<Roll[]>(() => {
+    if (typeof window === 'undefined') return initialRolls;
+    try {
+      const savedRolls = localStorage.getItem('rolls');
+      return savedRolls ? JSON.parse(savedRolls, (key, value) => {
+          if (key === 'data_compra') return new Date(value);
+          return value;
+      }) : initialRolls;
+    } catch (error) {
+      console.error("Failed to parse rolls from localStorage", error);
+      return initialRolls;
+    }
+  });
+
+  const [printJobs, setPrintJobs] = useState<PrintJob[]>(() => {
+    if (typeof window === 'undefined') return initialPrintJobs;
+    try {
+      const savedPrintJobs = localStorage.getItem('printJobs');
+      return savedPrintJobs ? JSON.parse(savedPrintJobs, (key, value) => {
+          if (key === 'data_impressao') return new Date(value);
+          return value;
+      }) : initialPrintJobs;
+    } catch (error) {
+        console.error("Failed to parse print jobs from localStorage", error);
+        return initialPrintJobs;
+    }
+  });
+
   const { toast } = useToast();
 
   useEffect(() => {
-    // Real-time listener for rolls
-    const qRolls = query(collection(db, "rolls"), orderBy("data_compra", "desc"));
-    const unsubscribeRolls = onSnapshot(qRolls, (querySnapshot) => {
-      const rollsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...convertTimestamps(doc.data()),
-      })) as Roll[];
-      setRolls(rollsData);
-    }, (error) => {
-      console.error("Error fetching rolls:", error);
-      toast({
-        variant: "destructive",
-        title: "Erro de Conexão",
-        description: "Não foi possível carregar os rolos. Verifique sua conexão e a configuração do Firebase.",
-      });
-    });
-
-    // Real-time listener for print jobs
-    const qPrintJobs = query(collection(db, "printJobs"), orderBy("data_impressao", "desc"));
-    const unsubscribePrintJobs = onSnapshot(qPrintJobs, (querySnapshot) => {
-      const printJobsData = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...convertTimestamps(doc.data()),
-      })) as PrintJob[];
-      setPrintJobs(printJobsData);
-    }, (error) => {
-      console.error("Error fetching print jobs:", error);
-      toast({
-        variant: "destructive",
-        title: "Erro de Conexão",
-        description: "Não foi possível carregar o histórico de impressões.",
-      });
-    });
-
-    // Cleanup listeners on unmount
-    return () => {
-      unsubscribeRolls();
-      unsubscribePrintJobs();
-    };
-  }, []);
-
-  const addRoll = async () => {
-    try {
-      const newRollData = {
-        nome_rolo: `Fuji Rolo #${rolls.length + 1}`,
-        data_compra: serverTimestamp(),
-        comprimento_inicial_metros: 93,
-        largura_cm: 30,
-        comprimento_atual_metros: 93,
-        ativo: true,
-      };
-      await addDoc(collection(db, "rolls"), newRollData);
-      toast({
-        title: "Rolo Adicionado",
-        description: `Um novo rolo Fuji foi adicionado ao estoque.`,
-      });
-    } catch (error) {
-      console.error("Error adding roll:", error);
-      toast({ variant: "destructive", title: "Erro", description: "Não foi possível adicionar o rolo." });
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('rolls', JSON.stringify(rolls));
     }
+  }, [rolls]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('printJobs', JSON.stringify(printJobs));
+    }
+  }, [printJobs]);
+
+  const addRoll = () => {
+    const newRoll: Roll = {
+      id: `roll_${new Date().getTime()}`,
+      nome_rolo: `Fuji Rolo #${rolls.length + 1}`,
+      data_compra: new Date(),
+      comprimento_inicial_metros: 93,
+      largura_cm: 30,
+      comprimento_atual_metros: 93,
+      ativo: true,
+    };
+    setRolls(prev => [...prev, newRoll]);
+    toast({
+      title: "Rolo Adicionado",
+      description: `Um novo rolo Fuji foi adicionado ao estoque.`,
+    });
   };
 
-  const registerPrint = async (printData: Omit<PrintJob, 'id' | 'data_impressao' | 'metros_consumidos' | 'rolo_utilizado_id'>) => {
+  const registerPrint = (printData: Omit<PrintJob, 'id' | 'data_impressao' | 'metros_consumidos' | 'rolo_utilizado_id' | 'tipo_foto'> & { tipo_foto: PrintSize }) => {
     let singlePhotoConsumption = 0;
     if (printData.tipo_foto === '20x30') singlePhotoConsumption = 0.30;
     else if (printData.tipo_foto === '30x40') singlePhotoConsumption = 0.40;
@@ -107,105 +88,83 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
       toast({ variant: "destructive", title: "Erro", description: "Tamanho de foto inválido." });
       return;
     }
+    
+    let photosLeftToPrint = printData.quantidade_fotos;
+    const newPrintJobs: PrintJob[] = [];
+    let updatedRolls = JSON.parse(JSON.stringify(rolls)); // Deep copy
+    let photosProcessed = 0;
 
-    try {
-      // First, get a list of candidate rolls outside the transaction
-      const rollsQuery = query(collection(db, "rolls"), where("ativo", "==", true), orderBy("data_compra", "asc"));
-      const activeRollsSnapshot = await getDocs(rollsQuery);
+    const activeRolls = updatedRolls
+      .filter((r: Roll) => r.ativo)
+      .sort((a: Roll, b: Roll) => new Date(a.data_compra).getTime() - new Date(b.data_compra).getTime());
 
-      if (activeRollsSnapshot.empty && printData.quantidade_fotos > 0) {
-        toast({
-          variant: "destructive",
-          title: "Falha na Impressão",
-          description: "Nenhum rolo ativo no estoque.",
-        });
-        return;
-      }
-
-      // Now, run the transaction
-      const transactionResult = await runTransaction(db, async (transaction) => {
-        let photosLeft = printData.quantidade_fotos;
-        let photosProcessed = 0;
-
-        for (const rollDoc of activeRollsSnapshot.docs) {
-          if (photosLeft <= 0) break;
-          
-          const rollRef = doc(db, "rolls", rollDoc.id);
-          // Re-read the document inside the transaction to get the latest state
-          const freshRollDoc = await transaction.get(rollRef);
-
-          if (!freshRollDoc.exists() || !freshRollDoc.data().ativo) {
-            continue; // Roll was deleted or became inactive since our initial query
-          }
-
-          const roll = { id: freshRollDoc.id, ...convertTimestamps(freshRollDoc.data()) } as Roll;
-          const maxPhotosOnThisRoll = Math.floor(roll.comprimento_atual_metros / singlePhotoConsumption);
-          
-          if (maxPhotosOnThisRoll <= 0) continue;
-
-          const photosToPrintFromThisRoll = Math.min(photosLeft, maxPhotosOnThisRoll);
-
-          if (photosToPrintFromThisRoll > 0) {
-            const consumptionForThisJob = photosToPrintFromThisRoll * singlePhotoConsumption;
-            
-            const newJobData = {
-              rolo_utilizado_id: roll.id,
-              nome_cliente: printData.nome_cliente,
-              data_impressao: serverTimestamp(),
-              tipo_foto: printData.tipo_foto,
-              quantidade_fotos: photosToPrintFromThisRoll,
-              metros_consumidos: consumptionForThisJob,
-            };
-            
-            const newJobRef = doc(collection(db, "printJobs"));
-            transaction.set(newJobRef, newJobData);
-
-            const newLength = roll.comprimento_atual_metros - consumptionForThisJob;
-            const newActivoState = newLength >= 0.60;
-
-            transaction.update(rollRef, {
-              comprimento_atual_metros: newLength,
-              ativo: newActivoState,
-            });
-
-            photosLeft -= photosToPrintFromThisRoll;
-            photosProcessed += photosToPrintFromThisRoll;
-          }
-        }
-        
-        if (photosProcessed === 0) {
-          throw new Error("Nenhum rolo no estoque tem comprimento suficiente para esta impressão.");
-        }
-
-        return { photosProcessed, photosLeft };
+    if (activeRolls.length === 0 && photosLeftToPrint > 0) {
+      toast({
+        variant: "destructive",
+        title: "Falha na Impressão",
+        description: "Nenhum rolo ativo no estoque.",
       });
-      
-      // Show toasts after the transaction is successfully committed
-      if (transactionResult) {
-        toast({
-          title: "Impressão Registrada",
-          description: `${transactionResult.photosProcessed} de ${printData.quantidade_fotos} fotos para ${printData.nome_cliente} foram processadas.`,
-        });
+      return;
+    }
 
-        if (transactionResult.photosLeft > 0) {
-          toast({
+    for (const roll of activeRolls) {
+        if (photosLeftToPrint <= 0) break;
+        
+        const maxPhotosOnThisRoll = Math.floor(roll.comprimento_atual_metros / singlePhotoConsumption);
+        
+        if (maxPhotosOnThisRoll <= 0) continue;
+
+        const photosToPrintFromThisRoll = Math.min(photosLeftToPrint, maxPhotosOnThisRoll);
+        
+        if (photosToPrintFromThisRoll > 0) {
+            const consumptionForThisJob = photosToPrintFromThisRoll * singlePhotoConsumption;
+
+            const newJob: PrintJob = {
+                id: `print_${new Date().getTime()}_${roll.id}`,
+                rolo_utilizado_id: roll.id,
+                nome_cliente: printData.nome_cliente,
+                data_impressao: new Date(),
+                tipo_foto: printData.tipo_foto,
+                quantidade_fotos: photosToPrintFromThisRoll,
+                metros_consumidos: consumptionForThisJob,
+            };
+            newPrintJobs.push(newJob);
+
+            const rollIndex = updatedRolls.findIndex((r: Roll) => r.id === roll.id);
+            if(rollIndex !== -1) {
+                const currentRoll = updatedRolls[rollIndex];
+                const newLength = currentRoll.comprimento_atual_metros - consumptionForThisJob;
+                currentRoll.comprimento_atual_metros = newLength;
+                
+                if (newLength < 0.60) {
+                    currentRoll.ativo = false;
+                }
+            }
+
+            photosLeftToPrint -= photosToPrintFromThisRoll;
+            photosProcessed += photosToPrintFromThisRoll;
+        }
+    }
+    
+    if (newPrintJobs.length > 0) {
+        setPrintJobs(prev => [...prev, ...newPrintJobs].sort((a,b) => new Date(b.data_impressao).getTime() - new Date(a.data_impressao).getTime()));
+        setRolls(updatedRolls.map((r: any) => ({...r, data_compra: new Date(r.data_compra)})));
+        toast({
+            title: "Impressão Registrada",
+            description: `${photosProcessed} de ${printData.quantidade_fotos} fotos para ${printData.nome_cliente} foram processadas.`,
+        });
+    }
+
+    if (photosLeftToPrint > 0) {
+        toast({
             variant: "destructive",
             title: "Papel Insuficiente",
-            description: `Não foi possível imprimir ${transactionResult.photosLeft} fotos restantes. Adicione mais rolos.`,
-          });
-        }
-      }
-    } catch (error: any) {
-        console.error("Transaction failed: ", error);
-        toast({
-            variant: "destructive",
-            title: "Falha na Transação",
-            description: error.message || "Não foi possível registrar a impressão.",
+            description: `Não foi possível imprimir ${photosLeftToPrint} fotos restantes. Adicione mais rolos.`,
         });
     }
   };
 
-  const deleteRoll = async (rollId: string) => {
+  const deleteRoll = (rollId: string) => {
     const isRollUsed = printJobs.some(job => job.rolo_utilizado_id === rollId);
     if (isRollUsed) {
       toast({
@@ -215,56 +174,35 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
       });
       return;
     }
-
-    try {
-      await deleteDoc(doc(db, "rolls", rollId));
-      toast({
-        title: "Rolo Excluído",
-        description: "O rolo foi removido do estoque.",
-      });
-    } catch (error) {
-      console.error("Error deleting roll:", error);
-      toast({ variant: "destructive", title: "Erro", description: "Não foi possível excluir o rolo." });
-    }
+    setRolls(prev => prev.filter(r => r.id !== rollId));
+    toast({
+      title: "Rolo Excluído",
+      description: "O rolo foi removido do estoque.",
+    });
   };
 
-  const deletePrintJob = async (printJobId: string) => {
+  const deletePrintJob = (printJobId: string) => {
     const jobToDelete = printJobs.find(job => job.id === printJobId);
     if (!jobToDelete) return;
-    
-    const rollRef = doc(db, "rolls", jobToDelete.rolo_utilizado_id);
-    const jobRef = doc(db, "printJobs", printJobId);
 
-    try {
-        await runTransaction(db, async (transaction) => {
-            const rollDoc = await transaction.get(rollRef);
-            if (!rollDoc.exists()) {
-                throw new Error("Rolo associado não encontrado!");
-            }
+    setRolls(prevRolls => {
+      const newRolls = [...prevRolls];
+      const rollIndex = newRolls.findIndex(r => r.id === jobToDelete.rolo_utilizado_id);
+      if (rollIndex !== -1) {
+        const roll = newRolls[rollIndex];
+        roll.comprimento_atual_metros += jobToDelete.metros_consumidos;
+        if (!roll.ativo && roll.comprimento_atual_metros >= 0.60) {
+          roll.ativo = true;
+        }
+      }
+      return newRolls;
+    });
 
-            const rollData = rollDoc.data();
-            const restoredLength = rollData.comprimento_atual_metros + jobToDelete.metros_consumidos;
-
-            transaction.update(rollRef, {
-                comprimento_atual_metros: restoredLength,
-                ativo: true,
-            });
-
-            transaction.delete(jobRef);
-        });
-
-        toast({
-          title: "Impressão Excluída",
-          description: "O registro foi removido e o papel estornado ao rolo.",
-        });
-    } catch (error: any) {
-        console.error("Error deleting print job:", error);
-        toast({
-            variant: "destructive",
-            title: "Erro ao Excluir",
-            description: error.message || "Não foi possível excluir a impressão.",
-        });
-    }
+    setPrintJobs(prevJobs => prevJobs.filter(job => job.id !== printJobId));
+    toast({
+      title: "Impressão Excluída",
+      description: "O registro foi removido e o papel estornado ao rolo.",
+    });
   };
 
   const getRollById = (id: string) => {
