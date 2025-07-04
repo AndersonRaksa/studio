@@ -10,7 +10,7 @@ import { RollConsumptionChart } from "@/components/roll-consumption-chart"
 
 export default function DashboardPage() {
   const { rolls, printJobs } = useFilmData()
-  const totalRollsCount = rolls.length;
+  const activeRollsCount = rolls.filter(r => r.ativo).length;
 
   return (
     <div className="space-y-8">
@@ -33,9 +33,9 @@ export default function DashboardPage() {
                     <Film className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{totalRollsCount}</div>
+                    <div className="text-2xl font-bold">{activeRollsCount}</div>
                     <p className="text-xs text-muted-foreground">
-                        Total de rolos no estoque.
+                        Total de rolos ativos no estoque.
                     </p>
                 </CardContent>
             </Card>
