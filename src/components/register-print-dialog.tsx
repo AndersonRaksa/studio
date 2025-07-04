@@ -44,7 +44,7 @@ export function RegisterPrintDialog() {
     defaultValues: {
         nome_cliente: "",
         tipo_foto: "20x30",
-        quantidade_fotos: NaN,
+        quantidade_fotos: 1,
     }
   })
 
@@ -69,7 +69,7 @@ export function RegisterPrintDialog() {
         <DialogHeader>
           <DialogTitle>Registrar Nova Impressão</DialogTitle>
           <DialogDescription>
-            Preencha os detalhes da impressão. O rolo mais antigo será utilizado automatically.
+            Preencha os detalhes da impressão. O sistema utilizará o rolo mais antigo disponível com papel suficiente.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
@@ -146,7 +146,7 @@ export function RegisterPrintDialog() {
                 <FormItem>
                   <FormLabel>Quantidade de Fotos</FormLabel>
                   <FormControl>
-                    <Input type="number" placeholder="Ex: 25" {...field} value={field.value || ''} />
+                    <Input type="number" placeholder="Ex: 25" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>

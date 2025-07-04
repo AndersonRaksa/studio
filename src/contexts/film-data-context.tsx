@@ -48,20 +48,6 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
   };
 
   const registerPrint = (printData: Omit<PrintJob, 'id' | 'data_impressao' | 'metros_consumidos' | 'rolo_utilizado_id'>) => {
-    const availableRolls = rolls
-      .filter(r => r.ativo)
-      .sort((a, b) => a.data_compra.getTime() - b.data_compra.getTime());
-
-    if (availableRolls.length === 0) {
-       toast({
-        variant: "destructive",
-        title: "Erro",
-        description: "Nenhum rolo disponível no estoque.",
-      });
-      return;
-    }
-    const roll = availableRolls[0];
-    
     let metros_consumidos = 0;
     if (printData.tipo_foto === '20x30') {
       metros_consumidos = 0.30 * printData.quantidade_fotos;
@@ -70,12 +56,18 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
     } else if (printData.tipo_foto === '30x60') {
       metros_consumidos = 0.60 * printData.quantidade_fotos;
     }
-    
-    if (roll.comprimento_atual_metros < metros_consumidos) {
-       toast({
+
+    const availableRolls = rolls
+      .filter(r => r.ativo)
+      .sort((a, b) => a.data_compra.getTime() - b.data_compra.getTime());
+
+    const suitableRoll = availableRolls.find(r => r.comprimento_atual_metros >= metros_consumidos);
+
+    if (!suitableRoll) {
+      toast({
         variant: "destructive",
         title: "Papel Insuficiente",
-        description: `O rolo "${roll.nome_rolo}" não tem comprimento suficiente para esta impressão.`,
+        description: "Nenhum rolo no estoque tem comprimento suficiente para esta impressão.",
       });
       return;
     }
@@ -83,14 +75,14 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
     const newPrintJob: PrintJob = {
       ...printData,
       id: `print-${new Date().getTime()}`,
-      rolo_utilizado_id: roll.id,
+      rolo_utilizado_id: suitableRoll.id,
       data_impressao: new Date(),
       metros_consumidos,
     };
 
     setPrintJobs(prev => [newPrintJob, ...prev].sort((a,b) => b.data_impressao.getTime() - a.data_impressao.getTime()));
     setRolls(prev => prev.map(r => {
-      if (r.id === roll.id) {
+      if (r.id === suitableRoll.id) {
         const newLength = r.comprimento_atual_metros - metros_consumidos;
         return {
           ...r,
@@ -102,7 +94,7 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
     }));
      toast({
       title: "Impressão Registrada",
-      description: `${printData.quantidade_fotos} fotos para ${printData.nome_cliente} foram registradas.`,
+      description: `${printData.quantidade_fotos} fotos para ${printData.nome_cliente} foram registradas no rolo "${suitableRoll.nome_rolo}".`,
     })
   };
 
