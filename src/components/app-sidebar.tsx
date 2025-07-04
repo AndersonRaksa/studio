@@ -41,7 +41,7 @@ export function AppSidebar() {
                     <Camera className="size-5" />
                 </Link>
              </Button>
-            <span className="font-headline text-lg font-semibold">FilmTrack</span>
+            <span className="font-headline text-lg font-semibold">Kobiyama</span>
           </div>
         </SidebarHeader>
         <SidebarMenu>

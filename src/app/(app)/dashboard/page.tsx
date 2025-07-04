@@ -6,10 +6,11 @@ import { AddRollDialog } from "@/components/add-roll-dialog"
 import { RegisterPrintDialog } from "@/components/register-print-dialog"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Film, History } from "lucide-react"
+import { RollConsumptionChart } from "@/components/roll-consumption-chart"
 
 export default function DashboardPage() {
   const { rolls, printJobs } = useFilmData()
-  const activeRollsCount = rolls.filter(roll => roll.ativo).length;
+  const totalRollsCount = rolls.length;
 
   return (
     <div className="space-y-8">
@@ -28,13 +29,13 @@ export default function DashboardPage() {
         <div className="grid gap-4 md:grid-cols-2">
             <Card>
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                    <CardTitle className="text-sm font-medium">Rolos Ativos</CardTitle>
+                    <CardTitle className="text-sm font-medium">Quantidade de Rolos</CardTitle>
                     <Film className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                    <div className="text-2xl font-bold">{activeRollsCount}</div>
+                    <div className="text-2xl font-bold">{totalRollsCount}</div>
                     <p className="text-xs text-muted-foreground">
-                        Rolos disponíveis para impressão.
+                        Total de rolos no estoque.
                     </p>
                 </CardContent>
             </Card>
@@ -53,16 +54,27 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      <section>
-        {rolls.length === 0 && (
-          <div className="text-center py-12 border-2 border-dashed rounded-lg">
-            <p className="text-muted-foreground">Nenhum rolo no estoque.</p>
-            <div className="mt-4">
-              <AddRollDialog />
+      {rolls.length > 0 ? (
+        <section>
+          <Card>
+            <CardHeader>
+              <CardTitle>Consumo dos Rolos</CardTitle>
+            </CardHeader>
+            <CardContent className="pl-2">
+              <RollConsumptionChart data={rolls} />
+            </CardContent>
+          </Card>
+        </section>
+      ) : (
+        <section>
+            <div className="text-center py-12 border-2 border-dashed rounded-lg">
+              <p className="text-muted-foreground">Nenhum rolo no estoque para exibir o gráfico.</p>
+              <div className="mt-4">
+                <AddRollDialog />
+              </div>
             </div>
-          </div>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   )
 }
