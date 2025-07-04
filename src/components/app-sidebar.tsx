@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation"
 import Link from "next/link"
+import { useState, useEffect } from "react"
 import {
   Sidebar,
   SidebarHeader,
@@ -24,6 +25,11 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const [isMounted, setIsMounted] = useState(false)
+
+  useEffect(() => {
+    setIsMounted(true)
+  }, [])
 
   return (
     <Sidebar>
@@ -43,7 +49,7 @@ export function AppSidebar() {
             <SidebarMenuItem key={item.href}>
               <SidebarMenuButton
                 asChild
-                isActive={pathname === item.href}
+                isActive={isMounted ? pathname === item.href : false}
                 tooltip={item.label}
               >
                 <Link href={item.href}>
