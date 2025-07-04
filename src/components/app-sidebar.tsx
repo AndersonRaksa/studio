@@ -61,7 +61,7 @@ export function AppSidebar() {
           ))}
         </SidebarMenu>
       </SidebarContent>
-      <SidebarFooter>
+      <SidebarFooter className="hidden md:flex">
         <Separator className="my-2" />
         <SidebarTrigger />
       </SidebarFooter>
