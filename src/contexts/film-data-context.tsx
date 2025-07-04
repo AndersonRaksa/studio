@@ -109,27 +109,41 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
     }
 
     try {
-      await runTransaction(db, async (transaction) => {
-        let remainingPhotosToPrint = printData.quantidade_fotos;
-        let totalPhotosPrinted = 0;
-        
-        const rollsQuery = query(collection(db, "rolls"), where("ativo", "==", true), orderBy("data_compra", "asc"));
-        const activeRollsSnapshot = await getDocs(rollsQuery);
+      // First, get a list of candidate rolls outside the transaction
+      const rollsQuery = query(collection(db, "rolls"), where("ativo", "==", true), orderBy("data_compra", "asc"));
+      const activeRollsSnapshot = await getDocs(rollsQuery);
 
-        if (activeRollsSnapshot.empty && remainingPhotosToPrint > 0) {
-            throw new Error("Nenhum rolo ativo no estoque.");
-        }
+      if (activeRollsSnapshot.empty && printData.quantidade_fotos > 0) {
+        toast({
+          variant: "destructive",
+          title: "Falha na Impressão",
+          description: "Nenhum rolo ativo no estoque.",
+        });
+        return;
+      }
+
+      // Now, run the transaction
+      const transactionResult = await runTransaction(db, async (transaction) => {
+        let photosLeft = printData.quantidade_fotos;
+        let photosProcessed = 0;
 
         for (const rollDoc of activeRollsSnapshot.docs) {
-          if (remainingPhotosToPrint <= 0) break;
-
-          const roll = { id: rollDoc.id, ...rollDoc.data() } as Roll;
-          const rollRef = doc(db, "rolls", roll.id);
+          if (photosLeft <= 0) break;
           
+          const rollRef = doc(db, "rolls", rollDoc.id);
+          // Re-read the document inside the transaction to get the latest state
+          const freshRollDoc = await transaction.get(rollRef);
+
+          if (!freshRollDoc.exists() || !freshRollDoc.data().ativo) {
+            continue; // Roll was deleted or became inactive since our initial query
+          }
+
+          const roll = { id: freshRollDoc.id, ...freshRollDoc.data() } as Roll;
           const maxPhotosOnThisRoll = Math.floor(roll.comprimento_atual_metros / singlePhotoConsumption);
+          
           if (maxPhotosOnThisRoll <= 0) continue;
 
-          const photosToPrintFromThisRoll = Math.min(remainingPhotosToPrint, maxPhotosOnThisRoll);
+          const photosToPrintFromThisRoll = Math.min(photosLeft, maxPhotosOnThisRoll);
 
           if (photosToPrintFromThisRoll > 0) {
             const consumptionForThisJob = photosToPrintFromThisRoll * singlePhotoConsumption;
@@ -154,28 +168,33 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
               ativo: newActivoState,
             });
 
-            remainingPhotosToPrint -= photosToPrintFromThisRoll;
-            totalPhotosPrinted += photosToPrintFromThisRoll;
+            photosLeft -= photosToPrintFromThisRoll;
+            photosProcessed += photosToPrintFromThisRoll;
           }
         }
         
-        if (totalPhotosPrinted === 0) {
-            throw new Error("Nenhum rolo no estoque tem comprimento suficiente para esta impressão.");
+        if (photosProcessed === 0) {
+          throw new Error("Nenhum rolo no estoque tem comprimento suficiente para esta impressão.");
         }
 
+        return { photosProcessed, photosLeft };
+      });
+      
+      // Show toasts after the transaction is successfully committed
+      if (transactionResult) {
         toast({
           title: "Impressão Registrada",
-          description: `${totalPhotosPrinted} de ${printData.quantidade_fotos} fotos para ${printData.nome_cliente} foram processadas.`,
+          description: `${transactionResult.photosProcessed} de ${printData.quantidade_fotos} fotos para ${printData.nome_cliente} foram processadas.`,
         });
 
-        if (remainingPhotosToPrint > 0) {
+        if (transactionResult.photosLeft > 0) {
           toast({
             variant: "destructive",
             title: "Papel Insuficiente",
-            description: `Não foi possível imprimir ${remainingPhotosToPrint} fotos restantes. Adicione mais rolos.`,
+            description: `Não foi possível imprimir ${transactionResult.photosLeft} fotos restantes. Adicione mais rolos.`,
           });
         }
-      });
+      }
     } catch (error: any) {
         console.error("Transaction failed: ", error);
         toast({
