@@ -1,7 +1,7 @@
 
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import type { Roll, PrintJob } from '@/lib/types';
 import { initialRolls, initialPrintJobs } from '@/lib/data';
 import { useToast } from "@/hooks/use-toast"
@@ -19,9 +19,53 @@ interface FilmDataContextType {
 const FilmDataContext = createContext<FilmDataContextType | undefined>(undefined);
 
 export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
-  const [rolls, setRolls] = useState<Roll[]>(initialRolls);
-  const [printJobs, setPrintJobs] = useState<PrintJob[]>(initialPrintJobs);
+  const [rolls, setRolls] = useState<Roll[]>([]);
+  const [printJobs, setPrintJobs] = useState<PrintJob[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
   const { toast } = useToast();
+
+  useEffect(() => {
+    try {
+      const storedRolls = localStorage.getItem('kobiyama-rolls');
+      if (storedRolls) {
+        const parsedRolls = JSON.parse(storedRolls).map((roll: Roll) => ({
+          ...roll,
+          data_compra: new Date(roll.data_compra),
+        }));
+        setRolls(parsedRolls);
+      } else {
+        setRolls(initialRolls);
+      }
+
+      const storedPrintJobs = localStorage.getItem('kobiyama-print-jobs');
+      if (storedPrintJobs) {
+        const parsedPrintJobs = JSON.parse(storedPrintJobs).map((job: PrintJob) => ({
+          ...job,
+          data_impressao: new Date(job.data_impressao),
+        }));
+        setPrintJobs(parsedPrintJobs);
+      } else {
+        setPrintJobs(initialPrintJobs);
+      }
+    } catch (error) {
+      console.error("Error reading from localStorage", error);
+      setRolls(initialRolls);
+      setPrintJobs(initialPrintJobs);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded) {
+      try {
+        localStorage.setItem('kobiyama-rolls', JSON.stringify(rolls));
+        localStorage.setItem('kobiyama-print-jobs', JSON.stringify(printJobs));
+      } catch (error) {
+        console.error("Error writing to localStorage", error);
+      }
+    }
+  }, [rolls, printJobs, isLoaded]);
 
   const getNumericId = (id: string) => {
     const parts = id.split('-');
