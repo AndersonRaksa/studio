@@ -1,7 +1,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import type { Roll, PrintJob, PrintSize } from '@/lib/types';
+import type { Roll, PrintJob } from '@/lib/types';
 import { initialRolls, initialPrintJobs } from '@/lib/data';
 import { useToast } from "@/hooks/use-toast"
 
@@ -11,7 +11,8 @@ interface FilmDataContextType {
   addRoll: () => void;
   registerPrint: (printData: Omit<PrintJob, 'id' | 'data_impressao' | 'metros_consumidos' | 'rolo_utilizado_id'>) => void;
   getRollById: (id: string) => Roll | undefined;
-  getTotalRolls: () => number;
+  deleteRoll: (rollId: string) => void;
+  deletePrintJob: (printJobId: string) => void;
 }
 
 const FilmDataContext = createContext<FilmDataContextType | undefined>(undefined);
@@ -21,12 +22,15 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
   const [printJobs, setPrintJobs] = useState<PrintJob[]>(initialPrintJobs);
   const { toast } = useToast();
 
-  const getTotalRolls = () => {
-    return rolls.filter(r => r.ativo).length;
+  const getNumericId = (id: string) => {
+    const parts = id.split('-');
+    const numPart = parts[parts.length - 1];
+    const num = parseInt(numPart, 10);
+    return isNaN(num) ? 0 : num;
   }
 
   const addRoll = () => {
-    const nextId = rolls.length > 0 ? Math.max(...rolls.map(r => parseInt(r.id.split('-')[2], 10))) + 1 : 1;
+    const nextId = (rolls.length > 0 ? Math.max(...rolls.map(r => getNumericId(r.id))) : 0) + 1;
     const newRoll: Roll = {
       id: `fuji-roll-${nextId}`,
       nome_rolo: `Fuji Rolo #${nextId}`,
@@ -36,7 +40,7 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
       comprimento_atual_metros: 93,
       ativo: true,
     };
-    setRolls(prev => [newRoll, ...prev]);
+    setRolls(prev => [newRoll, ...prev].sort((a,b) => b.data_compra.getTime() - a.data_compra.getTime()));
     toast({
       title: "Rolo Adicionado",
       description: `Um novo rolo Fuji foi adicionado ao estoque.`,
@@ -102,6 +106,56 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
     })
   };
 
+  const deleteRoll = (rollId: string) => {
+    const isRollUsed = printJobs.some(job => job.rolo_utilizado_id === rollId);
+
+    if (isRollUsed) {
+      toast({
+        variant: "destructive",
+        title: "Erro ao Excluir",
+        description: "Este rolo não pode ser excluído pois possui impressões associadas.",
+      });
+      return;
+    }
+
+    setRolls(prev => prev.filter(r => r.id !== rollId));
+    toast({
+      title: "Rolo Excluído",
+      description: "O rolo foi removido do estoque.",
+    });
+  };
+
+  const deletePrintJob = (printJobId: string) => {
+    const jobToDelete = printJobs.find(job => job.id === printJobId);
+    if (!jobToDelete) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Impressão não encontrada.",
+      });
+      return;
+    };
+
+    setRolls(prevRolls => prevRolls.map(roll => {
+      if (roll.id === jobToDelete.rolo_utilizado_id) {
+        const restoredLength = roll.comprimento_atual_metros + jobToDelete.metros_consumidos;
+        return {
+          ...roll,
+          comprimento_atual_metros: restoredLength,
+          ativo: true,
+        };
+      }
+      return roll;
+    }));
+
+    setPrintJobs(prevJobs => prevJobs.filter(job => job.id !== printJobId));
+
+    toast({
+      title: "Impressão Excluída",
+      description: "O registro de impressão foi removido e o papel foi estornado ao rolo.",
+    });
+  };
+
   const getRollById = (id: string) => {
     return rolls.find(r => r.id === id);
   };
@@ -112,7 +166,8 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
     addRoll,
     registerPrint,
     getRollById,
-    getTotalRolls,
+    deleteRoll,
+    deletePrintJob,
   };
 
   return (

@@ -3,19 +3,39 @@ import {
   Card,
   CardContent,
   CardDescription,
-  CardFooter,
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { format } from 'date-fns';
+import { MoreVertical, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
+import { useFilmData } from "@/contexts/film-data-context";
+import { Button } from "@/components/ui/button";
 
 interface RollCardProps {
   roll: Roll;
 }
 
 export function RollCard({ roll }: RollCardProps) {
+  const { deleteRoll } = useFilmData();
   const percentage = (roll.comprimento_atual_metros / roll.comprimento_inicial_metros) * 100;
 
   return (
@@ -23,9 +43,42 @@ export function RollCard({ roll }: RollCardProps) {
       <CardHeader>
         <div className="flex justify-between items-start">
             <CardTitle className="font-headline text-xl">{roll.nome_rolo}</CardTitle>
-            <Badge variant={roll.ativo ? "secondary" : "destructive"} className="capitalize">
-                {roll.ativo ? "Ativo" : "Esgotado"}
-            </Badge>
+            <div className="flex items-center gap-1">
+                <Badge variant={roll.ativo ? "secondary" : "destructive"} className="capitalize">
+                    {roll.ativo ? "Ativo" : "Esgotado"}
+                </Badge>
+                <AlertDialog>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0">
+                                <MoreVertical className="h-4 w-4" />
+                            </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                            <AlertDialogTrigger asChild>
+                                <DropdownMenuItem className="text-destructive cursor-pointer">
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Excluir
+                                </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                        <AlertDialogTitle>Você tem certeza?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Esta ação não pode ser desfeita. Rolos com impressões associadas não podem ser excluídos.
+                        </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteRoll(roll.id)} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                            Excluir
+                        </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            </div>
         </div>
         <CardDescription>Comprado em {format(roll.data_compra, "dd/MM/yyyy")}</CardDescription>
       </CardHeader>

@@ -4,20 +4,18 @@ import { useFilmData } from "@/contexts/film-data-context"
 import { PageHeader } from "@/components/page-header"
 import { AddRollDialog } from "@/components/add-roll-dialog"
 import { RegisterPrintDialog } from "@/components/register-print-dialog"
-import { RollCard } from "@/components/roll-card"
-import { Button } from "@/components/ui/button"
-import Link from "next/link"
-import { ArrowRight } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Film, History } from "lucide-react"
 
 export default function DashboardPage() {
-  const { rolls } = useFilmData()
-  const activeRolls = rolls.filter(roll => roll.ativo).slice(0, 3); // Show top 3 active rolls
+  const { rolls, printJobs } = useFilmData()
+  const activeRollsCount = rolls.filter(roll => roll.ativo).length;
 
   return (
     <div className="space-y-8">
       <PageHeader
         title="Dashboard"
-        description="Visão geral dos seus rolos e ações rápidas."
+        description="Visão geral do seu estoque e ações rápidas."
         actions={
           <div className="flex items-center gap-2">
             <RegisterPrintDialog />
@@ -26,25 +24,39 @@ export default function DashboardPage() {
         }
       />
       
-      <section className="space-y-4">
-        <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold font-headline">Rolos Ativos</h2>
-            <Button variant="link" asChild>
-                <Link href="/rolls">
-                    Ver todos <ArrowRight className="ml-2 h-4 w-4" />
-                </Link>
-            </Button>
+      <section>
+        <div className="grid gap-4 md:grid-cols-2">
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Rolos Ativos</CardTitle>
+                    <Film className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{activeRollsCount}</div>
+                    <p className="text-xs text-muted-foreground">
+                        Rolos disponíveis para impressão.
+                    </p>
+                </CardContent>
+            </Card>
+            <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">Total de Impressões</CardTitle>
+                    <History className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{printJobs.length}</div>
+                      <p className="text-xs text-muted-foreground">
+                        Registros no histórico.
+                    </p>
+                </CardContent>
+            </Card>
         </div>
-        
-        {activeRolls.length > 0 ? (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {activeRolls.map(roll => (
-              <RollCard key={roll.id} roll={roll} />
-            ))}
-          </div>
-        ) : (
+      </section>
+
+      <section>
+        {rolls.length === 0 && (
           <div className="text-center py-12 border-2 border-dashed rounded-lg">
-            <p className="text-muted-foreground">Nenhum rolo ativo no momento.</p>
+            <p className="text-muted-foreground">Nenhum rolo no estoque.</p>
             <div className="mt-4">
               <AddRollDialog />
             </div>

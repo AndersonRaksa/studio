@@ -67,7 +67,7 @@ export function RegisterPrintDialog() {
         <DialogHeader>
           <DialogTitle>Registrar Nova Impressão</DialogTitle>
           <DialogDescription>
-            Preencha os detalhes da impressão. O rolo mais antigo será utilizado automaticamente.
+            Preencha os detalhes da impressão. O rolo mais antigo será utilizado automatically.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
