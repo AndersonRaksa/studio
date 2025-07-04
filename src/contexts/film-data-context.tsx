@@ -74,7 +74,7 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
       unsubscribeRolls();
       unsubscribePrintJobs();
     };
-  }, [toast]);
+  }, []);
 
   const addRoll = async () => {
     try {
@@ -138,7 +138,7 @@ export const FilmDataProvider = ({ children }: { children: ReactNode }) => {
             continue; // Roll was deleted or became inactive since our initial query
           }
 
-          const roll = { id: freshRollDoc.id, ...freshRollDoc.data() } as Roll;
+          const roll = { id: freshRollDoc.id, ...convertTimestamps(freshRollDoc.data()) } as Roll;
           const maxPhotosOnThisRoll = Math.floor(roll.comprimento_atual_metros / singlePhotoConsumption);
           
           if (maxPhotosOnThisRoll <= 0) continue;
